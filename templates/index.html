@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Waste Sorter</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Simple spinner */
+        .loader {
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white rounded-lg shadow-xl p-6 md:p-8 w-full max-w-2xl">
+        <h1 class="text-3xl font-bold text-center text-gray-900 mb-6">AI Waste Sorter</h1>
+
+        <!-- Image/Video Area -->
+        <div class="relative w-full h-64 md:h-80 mb-6 bg-gray-200 rounded-lg overflow-hidden flex items-center justify-center">
+            <!-- This will show the uploaded image or snapped photo -->
+            <img id="previewImage" src="https://placehold.co/600x400/E2E8F0/9CA3AF?text=Upload+an+image+or+use+camera" alt="Preview" class="w-full h-full object-contain">
+            
+            <!-- This will show the live webcam feed -->
+            <video id="videoFeed" class="hidden w-full h-full object-contain" autoplay playsinline></video>
+            
+            <!-- Hidden canvas for snapping photos -->
+            <canvas id="canvas" class="hidden"></canvas>
+        </div>
+
+        <!-- Controls -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <!-- File Upload -->
+            <label for="fileInput" class="cursor-pointer bg-blue-600 text-white text-center font-medium py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-300">
+                Upload Image
+                <input type="file" id="fileInput" accept="image/*" class="hidden">
+            </label>
+
+            <!-- Start Camera -->
+            <button id="startCamButton" class="bg-green-600 text-white font-medium py-3 px-4 rounded-lg shadow-md hover:bg-green-700 transition duration-300">
+                Use Live Camera
+            </button>
+
+            <!-- Snap & Classify (hidden initially) -->
+            <button id="snapButton" class="hidden bg-red-600 text-white font-medium py-3 px-4 rounded-lg shadow-md hover:bg-red-700 transition duration-300">
+                Snap & Classify
+            </button>
+        </div>
+
+        <!-- Result Area -->
+        <div id="resultContainer" class="text-center">
+            <!-- Loading Spinner -->
+            <div id="loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mb-4 hidden"></div>
+
+            <!-- Prediction Output -->
+            <div id="predictionResult" class_="text-lg">
+                <p class="text-gray-500">Please provide an image to classify.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const previewImage = document.getElementById('previewImage');
+        const videoFeed = document.getElementById('videoFeed');
+        const canvas = document.getElementById('canvas');
+        const fileInput = document.getElementById('fileInput');
+        const startCamButton = document.getElementById('startCamButton');
+        const snapButton = document.getElementById('snapButton');
+        const loader = document.getElementById('loader');
+        const predictionResult = document.getElementById('predictionResult');
+
+        let currentStream = null;
+
+        // --- 1. Handle File Upload ---
+        fileInput.addEventListener('change', (event) => {
+            stopCamera();
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const base64Data = e.target.result;
+                    previewImage.src = base64Data;
+                    videoFeed.classList.add('hidden');
+                    previewImage.classList.remove('hidden');
+                    getPrediction(base64Data);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // --- 2. Handle Live Camera ---
+        startCamButton.addEventListener('click', async () => {
+            if (currentStream) stopCamera(); // Stop any existing stream
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                currentStream = stream;
+                videoFeed.srcObject = stream;
+                videoFeed.classList.remove('hidden');
+                previewImage.classList.add('hidden');
+                
+                // Update buttons
+                startCamButton.classList.add('hidden');
+                snapButton.classList.remove('hidden');
+                predictionResult.innerHTML = `<p class="text-gray-500">Aim at the object and press "Snap".</p>`;
+            } catch (err) {
+                console.error("Error accessing camera:", err);
+                predictionResult.innerHTML = `<p class="text-red-500">Error: Could not access camera. ${err.message}</p>`;
+            }
+        });
+
+        // --- 3. Handle Snapping Photo ---
+        snapButton.addEventListener('click', () => {
+            // Set canvas size to match video
+            canvas.width = videoFeed.videoWidth;
+            canvas.height = videoFeed.videoHeight;
+            
+            // Draw video frame onto canvas
+            const context = canvas.getContext('2d');
+            context.drawImage(videoFeed, 0, 0, canvas.width, canvas.height);
+            
+            // Get image data from canvas (as JPEG Base64)
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9); // 0.9 quality
+            
+            // Show the snapped photo
+            previewImage.src = dataUrl;
+            previewImage.classList.remove('hidden');
+            
+            // Stop the camera and hide video
+            stopCamera();
+            
+            // Send for prediction
+            getPrediction(dataUrl);
+        });
+
+        // --- 4. Send Image to Backend for Prediction ---
+        async function getPrediction(base64Data) {
+            // Show loader, hide old result
+            loader.classList.remove('hidden');
+            predictionResult.classList.add('hidden');
+
+            // Clean the Base64 string (remove prefix)
+            const cleanBase64 = base64Data.split(',')[1];
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ image: cleanBase64 })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Display the formatted result
+                displayPrediction(data);
+
+            } catch (error) {
+                console.error("Prediction error:", error);
+                displayPrediction({
+                    category: "Error",
+                    explanation: error.message || "Failed to get prediction. Check console."
+                });
+            } finally {
+                // Hide loader, show result
+                loader.classList.add('hidden');
+                predictionResult.classList.remove('hidden');
+            }
+        }
+
+        // --- 5. Display the Prediction ---
+        function displayPrediction(data) {
+            let categoryClass = "text-gray-700";
+            switch (data.category?.toLowerCase()) {
+                case "recyclable":
+                    categoryClass = "text-blue-600";
+                    break;
+                case "organic":
+                    categoryClass = "text-green-700";
+                    break;
+                case "general waste":
+                    categoryClass = "text-gray-800";
+                    break;
+                case "e-waste":
+                    categoryClass = "text-purple-600";
+                    break;
+                case "error":
+                    categoryClass = "text-red-600";
+                    break;
+            }
+
+            predictionResult.innerHTML = `
+                <h2 class="text-2xl font-bold ${categoryClass} mb-2">${data.category || "Error"}</h2>
+                <p class="text-gray-600">${data.explanation || "No explanation provided."}</p>
+            `;
+        }
+
+        // --- Utility: Stop Camera ---
+        function stopCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+            videoFeed.srcObject = null;
+            videoFeed.classList.add('hidden');
+            
+            // Reset buttons
+            startCamButton.classList.remove('hidden');
+            snapButton.classList.add('hidden');
+        }
+
+    </script>
+
+</body>
+</html>
