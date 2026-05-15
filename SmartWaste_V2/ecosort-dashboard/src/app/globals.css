@@ -1,0 +1,16 @@
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.scanner-animation::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: #22c55e;
+  box-shadow: 0 0 10px #22c55e;
+  animation: scan 2s linear infinite;
+}
