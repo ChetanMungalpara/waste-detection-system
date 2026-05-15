@@ -1,3 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* The animation for your AI Scanner */
 @keyframes scan {
   0% { transform: translateY(-100%); }
   100% { transform: translateY(100%); }
@@ -10,7 +15,7 @@
   left: 0;
   width: 100%;
   height: 2px;
-  background-color: #22c55e;
-  box-shadow: 0 0 10px #22c55e;
+  background-color: #10b981;
+  box-shadow: 0 0 10px #10b981;
   animation: scan 2s linear infinite;
 }
