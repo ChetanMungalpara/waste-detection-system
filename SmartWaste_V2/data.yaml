@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 15
+names: ['-Hazardous waste - battery-', '-Hazardous waste - medicine inner packaging-', '-Kitchen waste - carrot-', '-Kitchen waste - fruit-', '-Kitchen waste - potato-', '-Kitchen waste - vegetable roots and leaves-', '-Kitchen waste - white radish-', '-Other waste - brick-', '-Other waste - ceramic-', '-Other waste - cigarette butt-', '-Other waste - pebble-', '-Recyclables - can-', '-Recyclables - paper box-', '-Recyclables - paper cup-', '-Recyclables - plastic bottle-']
+
+roboflow:
+  workspace: yolo-amvrc
+  project: waste-detection-n2qy9
+  version: 2
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/yolo-amvrc/waste-detection-n2qy9/dataset/2
